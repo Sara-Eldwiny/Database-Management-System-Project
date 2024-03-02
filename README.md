@@ -1,2 +1,2 @@
-# Bash-Scrip-Project
+# Bash-Script-Project
 Database Management System (DBMS)
