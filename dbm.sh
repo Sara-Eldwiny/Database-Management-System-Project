@@ -1,6 +1,6 @@
 #!/bin/bash
 
-
+DATABASE_DIR="databases"
 
 function name_validation {
   if [[  ! $1 =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
@@ -11,23 +11,48 @@ function name_validation {
 }
 
 
-
 function Create_Database() {
 
 read -p "Enter the name of the new database :" db_name
 if name_validation $db_name;
  then
- if [ -d "./$db_name" ];
+ if [ -d "$DATABASE_DIR/$db_name" ];
   then
   echo "this database name is already exist"
   else 
-  mkdir ./$db_name 
+  mkdir $DATABASE_DIR/$db_name 
   echo "your database is created successfully"
   fi
 else 
  echo "your database name shouldn't start with number , or include any symbols "
 fi
 }
+
+
+function List_Databases() {
+  echo "your databases:"
+  for db_name in "$DATABASE_DIR"/*/; do
+    echo "$(basename "$db_name")" # basename: extract the filename from a given path. 
+  done
+}
+function Drop_Database(){
+ read -p "Enter the database name that you want to dropp: " db_name
+  if name_validation "$db_name"; then
+    db_path="$DATABASE_DIR/$db_name"
+    if [ -d "$db_path" ]; then
+
+     rm -rf "$db_path" #-rf powerful tool for recursively and forcefully removing directories and their contents.
+
+      echo "Database '$db_name' dropped successfully."
+      else
+        echo "Database '$db_name' does not exist."
+      fi
+    else
+      echo "Invalid database name. Please use only letters, numbers, and underscores."
+    fi
+}
+
+
 function Connect_Database() {
 
 read -p "Enter the database name to connect: " db_name
@@ -37,7 +62,7 @@ read -p "Enter the database name to connect: " db_name
       return
   fi
 
-db_path="./$db_name"
+db_path="$DATABASE_DIR/$db_name"
 
 
 
@@ -91,7 +116,7 @@ fi
 }
 
 echo -e "\n"
-echo "Please choose an option from 1 to 9"
+echo "Please choose an option from 1 to 5"
 
 options=("Create_Database" "List_Databases" "Connect_Database" "Drop_Database" "Exit")
 echo -e "choose an option from menu"
