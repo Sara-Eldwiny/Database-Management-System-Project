@@ -18,6 +18,97 @@ function name_validation {
 }
 
 
+function Create_Table() {
+  read -p "Enter the table name: " TBname
+
+  if ! name_validation "$TBname"; then
+    mainmenu
+  fi
+
+  if [[ -f "$DATABASE_DIR/$db_name/$TBname" ]]; then
+    echo_adv "Error: Table '$TBname' already exists in the current database."
+    mainmenu
+  fi
+
+
+  read -p "Enter the number of columns: " TBcolnum
+
+  counter=1
+  sep="|"
+  lsep="\n"
+  col_names=()
+  metadata=""
+  PK=""
+
+  while [ $counter -le $TBcolnum ]; do
+    read -p "Enter the name of column $counter: " TBcolname
+
+    if ! name_validation "$TBcolname"; then
+      continue
+    fi
+
+    echo "Choose the data type for $TBcolname"
+    select choice in "int" "string"; do
+      case $REPLY in
+        1) data_type="int"; break ;;
+        2) data_type="string"; break ;;
+        *) echo -e "\nInvalid option, please try again." ;;
+      esac
+    done
+
+    col_names+=("$TBcolname")
+
+    if [[ $metadata == "" ]]; then
+      metadata=$TBcolname$sep$data_type
+    else
+      metadata=$metadata$lsep$TBcolname$sep$data_type
+    fi
+
+    let counter=$counter+1
+
+  done
+
+
+
+# Ask about the primary key using a while loop
+echo "List of columns:"
+index=1
+for col_name in "${col_names[@]}"; do
+  echo "$index. $col_name"
+  let index=index+1
+done
+
+while true; do
+  read -p "Choose a column number for the primary key (1-$TBcolnum): " col_choice_index
+
+  if [[ $col_choice_index =~ ^[1-9]$|^1[0-9]$|^20$ ]] && [ $col_choice_index -le $TBcolnum ]; then
+    col_choice=${col_names[$((col_choice_index-1))]}
+    echo -e "\nSetting '$col_choice' as the primary key."
+    PK="$col_choice"
+    col_choice=$(echo "$col_choice" | cut -d'|' -f 1)
+    sed -i "s/$col_choice|[^|]*|/$col_choice|int|PK|/" "$DATABASE_DIR/$db_name/$TBname-meta.txt"
+    break
+  else
+    echo -e "\nInvalid choice, please enter a valid column number."
+  fi
+done
+
+  metadata="$metadata$lsep the PrimaryKey is : $PK"
+  # Join array elements into a string
+  colnames=$(IFS=$sep; echo "${col_names[*]}")
+
+  echo -e $metadata > "$DATABASE_DIR/$db_name/$TBname-meta.txt"
+  echo -e $colnames > "$DATABASE_DIR/$db_name/$TBname"
+
+
+
+
+  echo_adv "Table '$TBname' created successfully."
+  mainmenu
+}
+
+
+
 function Create_Database() {
   read -p "Enter the name of the new database: " db_name
 
