@@ -2,13 +2,13 @@
 
 DATABASE_DIR="databases"
 
-function echo_adv {
+function echo_adv() {
   echo -e "\n--------------------------------------------------------------------"
   echo -e "$1\n"
   echo -e "---------------------------------------------------------------\n"
 }
 
-function name_validation {
+function name_validation() {
  if [[ -n "$1" && "$1" =~ ^[a-zA-Z][a-zA-Z0-9_]*$ ]]; then
 	return 0  # Valid name
   else
@@ -69,7 +69,6 @@ function Create_Table() {
   done
 
 
-
 # Ask about the primary key using a while loop
 echo "List of columns:"
 index=1
@@ -101,10 +100,33 @@ done
   echo -e $colnames > "$DATABASE_DIR/$db_name/$TBname"
 
 
-
-
   echo_adv "Table '$TBname' created successfully."
   mainmenu
+}
+
+function Drop_Table() {
+  read -p "Enter the name of the table to be dropped: " table_name
+
+  if name_validation "$table_name"; then
+	table_path="$db_path/$table_name"
+        meta_path="$db_path/$table_name-meta.txt"
+
+	if [ -f "$table_path" ]; then
+  	rm "$table_path"
+  	echo "Table '$table_name' dropped successfully."
+
+         if [ -f "$meta_path" ]; then
+          rm "$meta_path"
+        fi
+
+	else
+  	echo "Table '$table_name' does not exist."
+	fi
+
+  else
+	echo "Invalid table name. Please use only letters, numbers, and underscores."
+  fi
+       
 }
 
 
