@@ -32,22 +32,26 @@ function Create_Table() {
 
 
   read -p "Enter the number of columns: " TBcolnum
+  while [[ ! $TBcolnum =~ ^[1-9]$|^1[0-9]$ ]]; do
+    read -p "Invalid input please try again .. Enter the number of columns: " TBcolnum
+  done
 
   counter=1
   sep="|"
   lsep="\n"
   col_names=()
+  data_types=()  # Added array to store data types
   metadata=""
   PK=""
 
   while [ $counter -le $TBcolnum ]; do
-    read -p "Enter the name of column $counter: " TBcolname
+    read -p "Enter the name of column $counter: " TBTBcolname
 
-    if ! name_validation "$TBcolname"; then
+    if ! name_validation "$TBTBcolname"; then
       continue
     fi
 
-    echo "Choose the data type for $TBcolname"
+    echo "Choose the data type for $TBTBcolname"
     select choice in "int" "string"; do
       case $REPLY in
         1) data_type="int"; break ;;
@@ -56,48 +60,58 @@ function Create_Table() {
       esac
     done
 
-    col_names+=("$TBcolname")
-
-    if [[ $metadata == "" ]]; then
-      metadata=$TBcolname$sep$data_type
-    else
-      metadata=$metadata$lsep$TBcolname$sep$data_type
-    fi
+    col_names+=("$TBTBcolname")
+    data_types+=("$data_type")  # Add data type to the array
 
     let counter=$counter+1
 
   done
 
 
-# Ask about the primary key using a while loop
-echo "List of columns:"
-index=1
-for col_name in "${col_names[@]}"; do
-  echo "$index. $col_name"
-  let index=index+1
-done
+  # Ask about the primary key using a while loop
+  echo "List of columns:"
+  index=1
+  for col_name in "${col_names[@]}"; do
+    echo "$index. $col_name"
+    let index=index+1
+  done
 
-while true; do
-  read -p "Choose a column number for the primary key (1-$TBcolnum): " col_choice_index
+  while true; do
+    read -p "Choose a column number for the primary key (1-$TBcolnum): " col_choice_index
 
-  if [[ $col_choice_index =~ ^[1-9]$|^1[0-9]$|^20$ ]] && [ $col_choice_index -le $TBcolnum ]; then
-    col_choice=${col_names[$((col_choice_index-1))]}
-    echo -e "\nSetting '$col_choice' as the primary key."
-    PK="$col_choice"
-    col_choice=$(echo "$col_choice" | cut -d'|' -f 1)
-    sed -i "s/$col_choice|[^|]*|/$col_choice|int|PK|/" "$DATABASE_DIR/$db_name/$TBname-meta.txt"
-    break
-  else
-    echo -e "\nInvalid choice, please enter a valid column number."
-  fi
-done
+    if [[ $col_choice_index =~ ^[1-9]$|^1[0-9]$|^20$ ]] && [ $col_choice_index -le $TBcolnum ]; then
+      col_choice=${col_names[$((col_choice_index-1))]}
+      echo -e "\nSetting '$col_choice' as the primary key."
+      PK="$col_choice"
 
-  metadata="$metadata$lsep the PrimaryKey is : $PK"
-  # Join array elements into a string
-  colnames=$(IFS=$sep; echo "${col_names[*]}")
+      # Enhanced part: Rebuild metadata with PK information
+      metadata=""
+      for i in "${!col_names[@]}"; do
+        col="${col_names[$i]}"
+        data_type="${data_types[$i]}"
+        pk_flag=""
+        if [[ $col == $PK ]]; then
+          pk_flag="PK"
+          data_type="int"  # Enforce integer for primary key
+        fi
+        metadata+="$col|$data_type|$pk_flag\n"
+      done
 
+      break
+    else
+      echo -e "\nInvalid choice, please enter a valid column number."
+    fi
+  done
+
+  # Removed unnecessary line:
+  # metadata="$metadata$lsep the PrimaryKey is : $PK"
+
+  # Join array elements into strings
+  TBcolnames=$(IFS=$sep; echo "${col_names[*]}")
+
+  # Write metadata and table data
   echo -e $metadata > "$DATABASE_DIR/$db_name/$TBname-meta.txt"
-  echo -e $colnames > "$DATABASE_DIR/$db_name/$TBname"
+  echo -e $TBcolnames > "$DATABASE_DIR/$db_name/$TBname"
 
 
   echo_adv "Table '$TBname' created successfully."
@@ -128,6 +142,116 @@ function Drop_Table() {
   fi
        
 }
+
+
+
+
+function Insert_into_Table() { 
+	
+	echo -e "\n"
+
+	read -p "Enter the table name: " TBname
+
+	if ! [[ -f "$DATABASE_DIR/$db_name/$TBname" ]] 
+	then
+		echo_adv "The table isn't existed"
+		Connect_Database
+	fi	
+
+	sep="|"
+	data=""
+	valid=0
+
+	colnums=$(cat "$DATABASE_DIR/$db_name/$TBname-meta.txt" | wc -l)
+
+	for (( i=1; i<$colnums; i++ ))
+	do
+		colname=$(awk 'BEGIN{FS="'$sep'"}{if (NR=='$i') print $1}' "$DATABASE_DIR/$db_name/$TBname-meta.txt")
+		data_type=$(awk 'BEGIN{FS="'$sep'"} {if (NR=='$i') print $2}' "$DATABASE_DIR/$db_name/$TBname-meta.txt")
+		pkey=$(awk 'BEGIN{FS="'$sep'"} {if (NR=='$i') print $3}' "$DATABASE_DIR/$db_name/$TBname-meta.txt")
+
+
+		read -p "$i. $colname ($data_type): " value
+
+		while [[ $valid == 0 ]]
+		do
+			if [[ $pkey == "PK" ]]
+			then
+
+				# validate the primary key isn't empty
+				if [[ $value == "" ]]
+				then
+					echo -e "\n invalid data"
+					echo "this field is a primary key and can't be empty"
+					echo "enter new value"
+					read -p "$i. $colname ($data_type): " value
+					valid=0
+					continue
+				else
+					valid=1
+				fi
+
+				# validate the primary key isn't repeated
+				# Validate that the primary key isn't repeated
+				flag=$(awk -v val="$value" 'BEGIN{FS="'$sep'"} {if ($'$i' == val) print $'$i'}' "$DATABASE_DIR/$db_name/$TBname")
+
+				if [[ -n $flag ]]; then
+				  echo -e "\nThis data already exists."
+				  echo "This field is a primary key and can't be repeated."	
+				  echo "Enter a new value:"
+				  read -p "$i. $colname ($data_type): " value
+				  valid=0
+				  continue
+				else
+				  valid=1
+				fi
+
+
+			fi
+
+
+			# validate the integer data type
+
+			if [[ $value != "" ]]
+			then
+				if [[ $data_type == "int" &&  ! $value =~ ^[0-9]+$ ]]
+				then
+					echo -e "\n invalid data"
+					echo "this field is an integer"
+					echo "enter new value"
+					read -p "$i. $colname ($data_type): " value
+					valid=0
+					continue
+				else
+					valid=1
+				fi
+			else
+				valid=1
+			fi
+		done
+
+
+	
+
+		
+		if [[ $data == "" ]]
+		then
+			data=$value
+		else
+			data=$data$sep$value
+		fi
+		
+	done
+
+	echo -e $data >> $DATABASE_DIR/$db_name/$TBname
+
+	echo "The data inserted successfully."
+
+	mainmenu
+
+}
+
+
 
 
 
@@ -192,7 +316,7 @@ function Connect_Database() {
 	echo -e "\n"
 	echo "Please choose an option from 1 to 8"
 	select table_com in "${table_options[@]}"; do
-  	echo -e "Choose an option from the menu"
+  
   	case $REPLY in
     	1) Create_Table ;;
     	2) List_Tables ;;
@@ -207,6 +331,7 @@ function Connect_Database() {
 	done
   else
 	echo "This database does not exist."
+        Connect_Database
   fi
 }
 
@@ -214,7 +339,7 @@ function mainmenu() {
   echo -e "\nPlease choose an option from 1 to 5"
 
   options=("Create_Database" "List_Databases" "Connect_Database" "Drop_Database" "Exit")
-  echo -e "Choose an option from the menu"
+ 
   select com in "${options[@]}"; do
 	case $REPLY in
   	1) Create_Database ;;
