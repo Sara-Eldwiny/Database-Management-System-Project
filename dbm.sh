@@ -143,7 +143,7 @@ function Drop_Table() {
   else
 	echo "Invalid table name. Please use only letters, numbers, and underscores."
   fi
-       
+  
 }
 
 function Insert_into_Table() { 
@@ -247,8 +247,6 @@ function Insert_into_Table() {
 
 	echo "The data inserted successfully."
 
-	mainmenu
-
 }
 
 function Select_From_Table() {
@@ -264,8 +262,9 @@ function Select_From_Table() {
         Connect_Database
     fi
 
-    echo "Columns in '$table_name':"
-    awk -F'|' '{print NR")", $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt" #1) column_name
+     echo "Columns in '$table_name':"
+     awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+
 
     read -p "Choose the number of the column: " column_number
 
@@ -285,7 +284,51 @@ function Select_From_Table() {
     fi
 }
 
+function Delete_From_Table() {
+    read -p "Enter the table name: " table_name
 
+    if ! name_validation "$table_name"; then
+        echo "Invalid table name."
+        Connect_Database
+    fi
+
+    if [[ ! -f "$DATABASE_DIR/$db_name/$table_name" ]]; then
+        echo "Table '$table_name' does not exist."
+        Connect_Database
+    fi
+
+      echo "Columns in '$table_name':"
+      awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+
+    read -p "Choose the number of the column: " column_number
+
+    read -p "Enter data for column $column_number: " search_data
+
+    # Get the name of the selected column
+    selected_column=$(awk -F'|' -v col_num="$column_number" 'NR==col_num {print $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt")
+
+    # Display rows that match the entered data along with their primary keys
+    matched_rows=$(awk -F'|' -v search="$search_data" -v col_num="$column_number" 'NR > 1 && $col_num == search {print NR")", $0}' "$DATABASE_DIR/$db_name/$table_name")
+
+    if [[ -z "$matched_rows" ]]; then
+        echo "No data found where '$selected_column' is '$search_data'."
+    else
+        echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
+        echo "$matched_rows"
+
+        read -p "Choose the number of the row to delete: " row_number
+
+        if [[ $row_number =~ ^[0-9]+$ ]]; then
+            # Delete the corresponding row
+            awk -v row="$row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
+            echo "Row $row_number deleted successfully."
+        else
+            echo "Invalid row number."
+        fi
+    fi
+}
+
+ 
 function Create_Database() {
   read -p "Enter the name of the new database: " db_name
 
