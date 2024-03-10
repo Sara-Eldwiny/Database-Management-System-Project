@@ -119,6 +119,15 @@ function Create_Table() {
 }
 
 
+function List_Tables() {
+ echo "Existing tables in database '$db_name':"
+ for TBname in "$DATABASE_DIR/$db_name"/*; do
+  if [ -f "$TBname" ] && [[ ! $TBname =~ -meta.txt$ ]]; then
+   echo "$(basename "$TBname")"
+  fi
+ done
+ Connect_Database
+}
 
 function Drop_Table() {
   read -p "Enter the name of the table to be dropped: " table_name
