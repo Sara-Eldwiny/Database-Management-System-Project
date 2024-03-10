@@ -120,7 +120,6 @@ function Create_Table() {
 
 
 
-
 function Drop_Table() {
   read -p "Enter the name of the table to be dropped: " table_name
 
@@ -366,7 +365,6 @@ function Update_Table() {
 
 
 
-
 function Delete_From_Table() {
     read -p "Enter the table name: " table_name
 
@@ -380,8 +378,8 @@ function Delete_From_Table() {
         Connect_Database
     fi
 
-      echo "Columns in '$table_name':"
-      awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+    echo "Columns in '$table_name':"
+    awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
 
     read -p "Choose the number of the column: " column_number
 
@@ -399,15 +397,31 @@ function Delete_From_Table() {
         echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
         echo "$matched_rows"
 
+        # Prompt the user to choose the number of the row to delete
         read -p "Choose the number of the row to delete: " row_number
 
-        if [[ $row_number =~ ^[0-9]+$ ]]; then
-            # Delete the corresponding row
-            awk -v row="$row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
-            echo "Row $row_number deleted successfully."
-        else
+        # Validate the row number
+        if ! [[ $row_number =~ ^[0-9]+$ ]] || [[ $row_number -lt 1 ]] || [[ $row_number -gt $(echo "$matched_rows" | wc -l) ]]; then
             echo "Invalid row number."
+            Connect_Database
         fi
+
+        # Extract the row number from the displayed list
+        db_row_number=$(echo "$matched_rows" | awk -v row="$row_number" 'NR == row {print $1}' | tr -d ')')
+
+        # Prompt for confirmation before deleting the row
+        read -p "Are you sure you want to delete row $row_number? (yes/no): " confirm_delete
+
+        case $confirm_delete in
+            yes|Yes|YES)
+                # Delete the corresponding row
+                awk -v row="$db_row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
+                echo "Row $row_number deleted successfully." ;;
+            no|No|NO)
+                echo "Deletion aborted." ;;
+            *)
+                echo "Invalid choice. Deletion aborted." ;;
+        esac
     fi
 }
 
