@@ -284,6 +284,89 @@ function Select_From_Table() {
     fi
 }
 
+function Update_Table() {
+    read -p "Enter the table name: " table_name
+
+    if ! name_validation "$table_name"; then
+        echo "Invalid table name."
+        Connect_Database
+    fi
+
+    if [[ ! -f "$DATABASE_DIR/$db_name/$table_name" ]]; then
+        echo "Table '$table_name' does not exist."
+        Connect_Database
+    fi
+
+    echo "Columns in '$table_name':"
+    awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+
+    read -p "Choose the number of the column to update: " column_number
+
+    # Validate the column number
+    if ! [[ $column_number =~ ^[0-9]+$ ]] || [[ $column_number -lt 1 ]] || [[ $column_number -gt $(awk -F'|' 'END{print NR}' "$DATABASE_DIR/$db_name/$table_name-meta.txt") ]]; then
+        echo "Invalid column number."
+        Connect_Database
+    fi
+
+    read -p "Enter data for column $column_number: " search_data
+
+    # Get the name of the selected column
+    selected_column=$(awk -F'|' -v col_num="$column_number" 'NR==col_num {print $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt")
+
+    # Display rows that match the entered data along with their primary keys
+    matched_rows=$(awk -F'|' -v search="$search_data" -v col_num="$column_number" 'NR > 1 && $col_num == search {print NR")", $0}' "$DATABASE_DIR/$db_name/$table_name")
+
+    if [[ -z "$matched_rows" ]]; then
+        echo "No data found where '$selected_column' is '$search_data'."
+    else
+        echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
+        echo "$matched_rows"
+
+        # Prompt the user to choose the number of the row to update
+        read -p "Choose the number of the row to update: " row_number
+
+        # Validate the row number
+        if ! [[ $row_number =~ ^[0-9]+$ ]] || [[ $row_number -lt 1 ]] || [[ $row_number -gt $(echo "$matched_rows" | wc -l) ]]; then
+            echo "Invalid row number."
+            Connect_Database
+        fi
+
+        # Extract the row number from the displayed list
+        db_row_number=$(echo "$matched_rows" | awk -v row="$row_number" 'NR == row {print $1}' | tr -d ')')
+
+        read -p "Enter the new value for column $selected_column: " new_value
+
+        # Validate the new value
+        if ! [[ -n "$new_value" ]]; then
+            echo "Invalid new value. Please enter a non-empty value."
+            Connect_Database
+        fi
+
+        # Read the entire table file, update the specific row, and write the modified content back
+        awk -v row="$db_row_number" -v new_val="$new_value" -F'|' -v col_num="$column_number" '
+            NR == row {
+                split($0, arr, "|");
+                arr[col_num] = new_val;
+                $0 = "";
+                for (i in arr) {
+                    if (i == length(arr)) {
+                        printf "%s\n", arr[i]
+                    } else {
+                        printf "%s|", arr[i]
+                    }
+                }
+            }
+            NR != row
+        ' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" \
+        && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
+
+        echo "Row $row_number updated successfully."
+    fi
+}
+
+
+
+
 function Delete_From_Table() {
     read -p "Enter the table name: " table_name
 
