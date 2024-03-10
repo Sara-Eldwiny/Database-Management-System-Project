@@ -19,7 +19,7 @@ function name_validation() {
 
 
 function Create_Table() {
-  read -p "Enter the table name: " TBname
+  read -p "Enter the New table name: " TBname
 
   if ! name_validation "$TBname"; then
     mainmenu
@@ -118,6 +118,36 @@ function Create_Table() {
   mainmenu
 }
 
+function Drop_Table() {
+    read -p "Enter the name of the table to be dropped: " table_name
+
+    if [ -f "$db_path/$table_name" ]; then
+        table_path="$db_path/$table_name"
+        meta_path="$db_path/$table_name-meta.txt"
+
+        read -p "Are you sure you want to delete table '$table_name'? (y/n): " confirm_delete
+
+        case $confirm_delete in
+            [yY])
+                if rm "$table_path" && rm "$meta_path"; then
+                    echo "Table '$table_name' deleted successfully."
+                else
+                    echo "Failed to delete table '$table_name'."
+                fi
+                ;;
+            [nN])
+                echo "Deletion canceled."
+                ;;
+            *)
+                echo "Invalid choice. Deletion canceled."
+                ;;
+        esac
+    else
+        echo "Table '$table_name' does not exist."
+    fi
+}
+
+
 
 function List_Tables() {
  echo "Existing tables in database '$db_name':"
@@ -129,30 +159,38 @@ function List_Tables() {
  Connect_Database
 }
 
-function Drop_Table() {
-  read -p "Enter the name of the table to be dropped: " table_name
+function Drop_Database() {
+  read -p "Enter the database name that you want to drop: " db_name
+  if name_validation "$db_name"; then
+    db_path="$DATABASE_DIR/$db_name"
+    if [ -d "$db_path" ]; then
+      echo "Database '$db_name' exists."
+      # Ask for confirmation before dropping the database
+      read -p "Are you sure you want to drop database '$db_name'?(y/n): " confirm_drop
 
-  if name_validation "$table_name"; then
-	table_path="$db_path/$table_name"
-        meta_path="$db_path/$table_name-meta.txt"
+      echo "Confirmation input: $confirm_drop"
 
-	if [ -f "$table_path" ]; then
-  	rm "$table_path"
-  	echo "Table '$table_name' dropped successfully."
-
-         if [ -f "$meta_path" ]; then
-          rm "$meta_path"
-        fi
-
-	else
-  	echo "Table '$table_name' does not exist."
-	fi
-
+      case $confirm_drop in
+          [yY])
+              rm -rf "$db_path" # recursively and forcefully remove the directory and its contents
+              echo "Database '$db_name' dropped successfully."
+              ;;
+          [nN])
+              echo "Dropping database '$db_name' canceled."
+              ;;
+          *)
+              echo "Invalid choice. Dropping database '$db_name' canceled."
+              ;;
+      esac
+    else
+      echo "Database '$db_name' does not exist."
+    fi
   else
-	echo "Invalid table name. Please use only letters, numbers, and underscores."
+    echo "Invalid database name. Please use only letters, numbers, and underscores."
   fi
-  
 }
+
+
 
 function Insert_into_Table() { 
 	
@@ -258,6 +296,7 @@ function Insert_into_Table() {
 }
 
 function Select_From_Table() {
+    echo "----- select ----- "
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -293,6 +332,7 @@ function Select_From_Table() {
 }
 
 function Update_Table() {
+     echo "----- Update ----- "
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -375,6 +415,7 @@ function Update_Table() {
 
 
 function Delete_From_Table() {
+    echo "----- Delete ----- "
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -419,17 +460,17 @@ function Delete_From_Table() {
         db_row_number=$(echo "$matched_rows" | awk -v row="$row_number" 'NR == row {print $1}' | tr -d ')')
 
         # Prompt for confirmation before deleting the row
-        read -p "Are you sure you want to delete row $row_number? (yes/no): " confirm_delete
+        read -p "Are you sure you want to delete row $row_number? (y/n): " confirm_delete
 
         case $confirm_delete in
-            yes|Yes|YES)
+            y|Y)
                 # Delete the corresponding row
                 awk -v row="$db_row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
                 echo "Row $row_number deleted successfully." ;;
-            no|No|NO)
-                echo "Deletion aborted." ;;
+            n|N)
+                echo "Deletion faild." ;;
             *)
-                echo "Invalid choice. Deletion aborted." ;;
+                echo "Invalid choice. Deletion faild." ;;
         esac
     fi
 }
@@ -463,20 +504,6 @@ function List_Databases() {
   done
 }
 
-function Drop_Database() {
-  read -p "Enter the database name that you want to dropp: " db_name
-  if name_validation "$db_name"; then
-    db_path="$DATABASE_DIR/$db_name"
-    if [ -d "$db_path" ]; then
-      rm -rf "$db_path" #powerful tool for recursively and forcefully removing directories and their contents.
-      echo "Database '$db_name' dropped successfully."
-    else
-      echo "Database '$db_name' does not exist."
-    fi
-  else
-    echo "Invalid database name. Please use only letters, numbers, and underscores."
-  fi
-}
 
 
 
