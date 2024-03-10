@@ -25,11 +25,11 @@ function Create_Table() {
     mainmenu
   fi
 
+  # Check if the table already exists
   if [[ -f "$DATABASE_DIR/$db_name/$TBname" ]]; then
     echo_adv "Error: Table '$TBname' already exists in the current database."
     mainmenu
   fi
-
 
   read -p "Enter the number of columns: " TBcolnum
   while [[ ! $TBcolnum =~ ^[1-9]$|^1[0-9]$ ]]; do
@@ -46,6 +46,18 @@ function Create_Table() {
 
   while [ $counter -le $TBcolnum ]; do
     read -p "Enter the name of column $counter: " TBTBcolname
+
+    # Check if the column name starts with a space
+    if [[ "${TBTBcolname:0:1}" == " " ]]; then
+      echo_adv "Error: Column name '$TBTBcolname' starts with a space. Please choose a different name."
+      continue
+    fi
+
+    # Check if the column name already exists
+    if [[ " ${col_names[@]} " =~ " ${TBTBcolname} " ]]; then
+      echo_adv "Error: Column name '$TBTBcolname' already exists. Please choose a different name."
+      continue
+    fi
 
     if ! name_validation "$TBTBcolname"; then
       continue
@@ -67,12 +79,11 @@ function Create_Table() {
 
   done
 
-
   # Ask about the primary key using a while loop
   echo "List of columns:"
   index=1
   for col_name in "${col_names[@]}"; do
-    echo "$index. $col_name"
+    echo "$index) $col_name"
     let index=index+1
   done
 
@@ -103,9 +114,6 @@ function Create_Table() {
     fi
   done
 
-  # Removed unnecessary line:
-  # metadata="$metadata$lsep the PrimaryKey is : $PK"
-
   # Join array elements into strings
   TBcolnames=$(IFS=$sep; echo "${col_names[*]}")
 
@@ -113,10 +121,11 @@ function Create_Table() {
   echo -e $metadata > "$DATABASE_DIR/$db_name/$TBname-meta.txt"
   echo -e $TBcolnames > "$DATABASE_DIR/$db_name/$TBname"
 
-
   echo_adv "Table '$TBname' created successfully."
   mainmenu
 }
+
+
 
 function Drop_Table() {
     read -p "Enter the name of the table to be dropped: " table_name
@@ -145,6 +154,7 @@ function Drop_Table() {
     else
         echo "Table '$table_name' does not exist."
     fi
+
 }
 
 
@@ -156,7 +166,7 @@ function List_Tables() {
    echo "$(basename "$TBname")"
   fi
  done
- Connect_Database
+
 }
 
 function Drop_Database() {
@@ -188,6 +198,7 @@ function Drop_Database() {
   else
     echo "Invalid database name. Please use only letters, numbers, and underscores."
   fi
+mainmenu
 }
 
 
@@ -293,6 +304,7 @@ function Insert_into_Table() {
 
 	echo "The data inserted successfully."
 
+
 }
 
 function Select_From_Table() {
@@ -328,6 +340,68 @@ function Select_From_Table() {
     else
         echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
         echo "$matched_rows"
+    fi
+
+
+}
+function Delete_From_Table() {
+    echo "----- Delete ----- "
+    read -p "Enter the table name: " table_name
+
+    if ! name_validation "$table_name"; then
+        echo "Invalid table name."
+        Connect_Database
+    fi
+
+    if [[ ! -f "$DATABASE_DIR/$db_name/$table_name" ]]; then
+        echo "Table '$table_name' does not exist."
+        Connect_Database
+    fi
+
+    echo "Columns in '$table_name':"
+    awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+
+    read -p "Choose the number of the column: " column_number
+
+    read -p "Enter data for column $column_number: " search_data
+
+    # Get the name of the selected column
+    selected_column=$(awk -F'|' -v col_num="$column_number" 'NR==col_num {print $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt")
+
+    # Display rows that match the entered data along with their primary keys
+    matched_rows=$(awk -F'|' -v search="$search_data" -v col_num="$column_number" 'NR > 1 && $col_num == search {print NR")", $0}' "$DATABASE_DIR/$db_name/$table_name")
+
+    if [[ -z "$matched_rows" ]]; then
+        echo "No data found where '$selected_column' is '$search_data'."
+    else
+        echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
+        echo "$matched_rows"
+
+        # Prompt the user to choose the number of the row to delete
+        read -p "Choose the number of the row to delete: " row_number
+
+        # Validate the row number
+        if ! [[ $row_number =~ ^[0-9]+$ ]] || [[ $row_number -lt 1 ]] || [[ $row_number -gt $(echo "$matched_rows" | wc -l) ]]; then
+            echo "Invalid row number."
+            Connect_Database
+        fi
+
+        # Extract the row number from the displayed list
+        db_row_number=$(echo "$matched_rows" | awk -v row="$row_number" 'NR == row {print $1}' | tr -d ')')
+
+        # Prompt for confirmation before deleting the row
+        read -p "Are you sure you want to delete row $row_number? (y/n): " confirm_delete
+
+        case $confirm_delete in
+            y|Y)
+                # Delete the corresponding row
+                awk -v row="$db_row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
+                echo "Row $row_number deleted successfully." ;;
+            n|N)
+                echo "Deletion faild." ;;
+            *)
+                echo "Invalid choice. Deletion faild." ;;
+        esac
     fi
 }
 
@@ -414,67 +488,6 @@ function Update_Table() {
 
 
 
-function Delete_From_Table() {
-    echo "----- Delete ----- "
-    read -p "Enter the table name: " table_name
-
-    if ! name_validation "$table_name"; then
-        echo "Invalid table name."
-        Connect_Database
-    fi
-
-    if [[ ! -f "$DATABASE_DIR/$db_name/$table_name" ]]; then
-        echo "Table '$table_name' does not exist."
-        Connect_Database
-    fi
-
-    echo "Columns in '$table_name':"
-    awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
-
-    read -p "Choose the number of the column: " column_number
-
-    read -p "Enter data for column $column_number: " search_data
-
-    # Get the name of the selected column
-    selected_column=$(awk -F'|' -v col_num="$column_number" 'NR==col_num {print $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt")
-
-    # Display rows that match the entered data along with their primary keys
-    matched_rows=$(awk -F'|' -v search="$search_data" -v col_num="$column_number" 'NR > 1 && $col_num == search {print NR")", $0}' "$DATABASE_DIR/$db_name/$table_name")
-
-    if [[ -z "$matched_rows" ]]; then
-        echo "No data found where '$selected_column' is '$search_data'."
-    else
-        echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
-        echo "$matched_rows"
-
-        # Prompt the user to choose the number of the row to delete
-        read -p "Choose the number of the row to delete: " row_number
-
-        # Validate the row number
-        if ! [[ $row_number =~ ^[0-9]+$ ]] || [[ $row_number -lt 1 ]] || [[ $row_number -gt $(echo "$matched_rows" | wc -l) ]]; then
-            echo "Invalid row number."
-            Connect_Database
-        fi
-
-        # Extract the row number from the displayed list
-        db_row_number=$(echo "$matched_rows" | awk -v row="$row_number" 'NR == row {print $1}' | tr -d ')')
-
-        # Prompt for confirmation before deleting the row
-        read -p "Are you sure you want to delete row $row_number? (y/n): " confirm_delete
-
-        case $confirm_delete in
-            y|Y)
-                # Delete the corresponding row
-                awk -v row="$db_row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
-                echo "Row $row_number deleted successfully." ;;
-            n|N)
-                echo "Deletion faild." ;;
-            *)
-                echo "Invalid choice. Deletion faild." ;;
-        esac
-    fi
-}
-
  
 function Create_Database() {
   read -p "Enter the name of the new database: " db_name
@@ -502,12 +515,14 @@ function List_Databases() {
   for db_name in "$DATABASE_DIR"/*/; do
     echo "$(basename "$db_name")"
   done
+mainmenu
 }
 
 
 
 
 function Connect_Database() {
+  echo -e "\n"
   read -p "Enter the database name to connect: " db_name
 
   if ! name_validation "$db_name"; then
@@ -557,6 +572,7 @@ function mainmenu() {
   	*) echo "Invalid option" ;;
 	esac
   done
+mainmenu
 }
 
 mainmenu
