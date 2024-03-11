@@ -22,13 +22,13 @@ function Create_Table() {
   read -p "Enter the New table name: " TBname
 
   if ! name_validation "$TBname"; then
-    mainmenu
+    Connect_Database
   fi
 
   # Check if the table already exists
   if [[ -f "$DATABASE_DIR/$db_name/$TBname" ]]; then
     echo_adv "Error: Table '$TBname' already exists in the current database."
-    mainmenu
+    Connect_Database
   fi
 
   read -p "Enter the number of columns: " TBcolnum
@@ -103,7 +103,7 @@ function Create_Table() {
         pk_flag=""
         if [[ $col == $PK ]]; then
           pk_flag="PK"
-          data_type="int"  # Enforce integer for primary key
+
         fi
         metadata+="$col|$data_type|$pk_flag\n"
       done
@@ -122,12 +122,13 @@ function Create_Table() {
   echo -e $TBcolnames > "$DATABASE_DIR/$db_name/$TBname"
 
   echo_adv "Table '$TBname' created successfully."
-  mainmenu
+  Connect_Database
 }
 
 
 
 function Drop_Table() {
+    List_Tables
     read -p "Enter the name of the table to be dropped: " table_name
 
     if [ -f "$db_path/$table_name" ]; then
@@ -154,7 +155,7 @@ function Drop_Table() {
     else
         echo "Table '$table_name' does not exist."
     fi
-
+Connect_Database
 }
 
 
@@ -170,6 +171,7 @@ function List_Tables() {
 }
 
 function Drop_Database() {
+  List_Databases
   read -p "Enter the database name that you want to drop: " db_name
   if name_validation "$db_name"; then
     db_path="$DATABASE_DIR/$db_name"
@@ -206,7 +208,7 @@ mainmenu
 function Insert_into_Table() { 
 	
 	echo -e "\n"
-
+        List_Tables
 	read -p "Enter the table name: " TBname
 
 	if ! [[ -f "$DATABASE_DIR/$db_name/$TBname" ]] 
@@ -269,22 +271,18 @@ function Insert_into_Table() {
 
 			# validate the integer data type
 
-			if [[ $value != "" ]]
-			then
-				if [[ $data_type == "int" &&  ! $value =~ ^[0-9]+$ ]]
-				then
-					echo -e "\n invalid data"
-					echo "this field is an integer"
-					echo "enter new value"
-					read -p "$i. $colname ($data_type): " value
-					valid=0
-					continue
-				else
-					valid=1
-				fi
-			else
-				valid=1
+			# Validate the integer data type
+			if [[ $value != "" ]]; then
+			    if [[ $data_type == "int" && ! $value =~ ^[0-9]+$ ]]; then
+			        echo -e "\nInvalid data."
+			        echo "This field is an integer. Enter a valid integer value."
+			        read -p "$i. $colname ($data_type): " value
+			        valid=0
+			        continue
+			    fi
 			fi
+			valid=1
+
 		done
 
 
@@ -303,11 +301,12 @@ function Insert_into_Table() {
 	echo -e $data >> $DATABASE_DIR/$db_name/$TBname
 
 	echo "The data inserted successfully."
-
+        Connect_Database
 
 }
 
 function Select_From_Table() {
+    List_Tables
     echo "----- select ----- "
     read -p "Enter the table name: " table_name
 
@@ -341,11 +340,13 @@ function Select_From_Table() {
         echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
         echo "$matched_rows"
     fi
+    Connect_Database
 
 
 }
 function Delete_From_Table() {
     echo "----- Delete ----- "
+    List_Tables
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -403,10 +404,12 @@ function Delete_From_Table() {
                 echo "Invalid choice. Deletion faild." ;;
         esac
     fi
+    Connect_Database
 }
 
 function Update_Table() {
      echo "----- Update ----- "
+     List_Tables
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -484,6 +487,7 @@ function Update_Table() {
 
         echo "Row $row_number updated successfully."
     fi
+    Connect_Database
 }
 
 
@@ -515,7 +519,7 @@ function List_Databases() {
   for db_name in "$DATABASE_DIR"/*/; do
     echo "$(basename "$db_name")"
   done
-mainmenu
+
 }
 
 
@@ -523,6 +527,7 @@ mainmenu
 
 function Connect_Database() {
   echo -e "\n"
+  List_Databases
   read -p "Enter the database name to connect: " db_name
 
   if ! name_validation "$db_name"; then
