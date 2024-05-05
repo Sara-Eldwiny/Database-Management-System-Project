@@ -79,7 +79,7 @@ function Create_Table() {
 
   done
 
-  # Ask about the primary key using a while loop
+  # Ask about the primary key 
   echo "List of columns:"
   index=1
   for col_name in "${col_names[@]}"; do
@@ -250,7 +250,6 @@ function Insert_into_Table() {
 					valid=1
 				fi
 
-				# validate the primary key isn't repeated
 				# Validate that the primary key isn't repeated
 				flag=$(awk -v val="$value" 'BEGIN{FS="'$sep'"} {if ($'$i' == val) print $'$i'}' "$DATABASE_DIR/$db_name/$TBname")
 
@@ -268,9 +267,6 @@ function Insert_into_Table() {
 
 			fi
 
-
-			# validate the integer data type
-
 			# Validate the integer data type
 			if [[ $value != "" ]]; then
 			    if [[ $data_type == "int" && ! $value =~ ^[0-9]+$ ]]; then
@@ -284,10 +280,6 @@ function Insert_into_Table() {
 			valid=1
 
 		done
-
-
-	
-
 		
 		if [[ $data == "" ]]
 		then
@@ -310,23 +302,48 @@ function Select_From_Table() {
     echo "----- select ----- "
     read -p "Enter the table name: " table_name
 
-    if ! name_validation "$table_name"; then
-        echo "Invalid table name."
-        Connect_Database
+   if [[ -z "$table_name" ]]; then
+    echo "Table name cannot be empty."
+    Connect_Database
+   elif ! name_validation "$table_name"; then
+    echo "Invalid table name."
+    Connect_Database
     fi
+
 
     if [[ ! -f "$DATABASE_DIR/$db_name/$table_name" ]]; then
         echo "Table '$table_name' does not exist."
         Connect_Database
     fi
 
-     echo "Columns in '$table_name':"
-     awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
+    
+
+	# Display column names
+	echo "Columns in '$table_name':"
+	awk -F'|' '$1 != "" {print NR")", $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
 
 
-    read -p "Choose the number of the column: " column_number
 
-    read -p "Enter data for column $column_number: " search_data
+	# Count the number of non-empty columns listed in the metadata file
+	num_columns=$(awk -F'|' '$1 != "" {print NR}' "$DATABASE_DIR/$db_name/$table_name-meta.txt" | tail -n 1)
+
+	# Check if the input is a valid number within the range of columns
+	while true; do
+	    read -p "Choose the number of the column (1-$num_columns): " column_number
+
+	    # Check if the input is a valid integer and within the range of columns
+	    if [[ "$column_number" =~ ^[1-9][0-9]*$ && "$column_number" -le "$num_columns" ]]; then
+		break  # Exit the loop if the input is valid
+	    else
+		echo "Invalid column number. Please choose a number between 1 and $num_columns."
+	    fi
+	done
+
+	# Now that we have a valid column number, proceed to read the data for the column
+	read -p "Enter data for column $column_number: " search_data
+
+
+
 
     # Get the name of the selected column
     selected_column=$(awk -F'|' -v col_num="$column_number" 'NR==col_num {print $1}' "$DATABASE_DIR/$db_name/$table_name-meta.txt")
@@ -362,7 +379,14 @@ function Delete_From_Table() {
     echo "Columns in '$table_name':"
     awk -F'|' '$1 != "" { print NR")", $1 }' "$DATABASE_DIR/$db_name/$table_name-meta.txt"
 
+    # Prompt the user to choose the number of the column
     read -p "Choose the number of the column: " column_number
+
+    # Check if the input is a valid number within the range of columns
+    if ! [[ "$column_number" =~ ^[1-9][0-9]*$ && "$column_number" -le $(awk -F'|' 'NF {print NR}' "$DATABASE_DIR/$db_name/$table_name-meta.txt" | tail -n 1) ]]; then
+        echo "Invalid column number."
+        Connect_Database
+    fi
 
     read -p "Enter data for column $column_number: " search_data
 
@@ -374,6 +398,7 @@ function Delete_From_Table() {
 
     if [[ -z "$matched_rows" ]]; then
         echo "No data found where '$selected_column' is '$search_data'."
+        Connect_Database
     else
         echo "Rows in '$table_name' where '$selected_column' is '$search_data':"
         echo "$matched_rows"
@@ -381,8 +406,8 @@ function Delete_From_Table() {
         # Prompt the user to choose the number of the row to delete
         read -p "Choose the number of the row to delete: " row_number
 
-        # Validate the row number
-        if ! [[ $row_number =~ ^[0-9]+$ ]] || [[ $row_number -lt 1 ]] || [[ $row_number -gt $(echo "$matched_rows" | wc -l) ]]; then
+        # Check if the input is a valid number within the range of displayed rows
+        if ! [[ "$row_number" =~ ^[1-9][0-9]*$ && "$row_number" -le $(echo "$matched_rows" | wc -l) ]]; then
             echo "Invalid row number."
             Connect_Database
         fi
@@ -399,17 +424,18 @@ function Delete_From_Table() {
                 awk -v row="$db_row_number" 'NR != row' "$DATABASE_DIR/$db_name/$table_name" > "$DATABASE_DIR/$db_name/$table_name.tmp" && mv "$DATABASE_DIR/$db_name/$table_name.tmp" "$DATABASE_DIR/$db_name/$table_name"
                 echo "Row $row_number deleted successfully." ;;
             n|N)
-                echo "Deletion faild." ;;
+                echo "Deletion failed." ;;
             *)
-                echo "Invalid choice. Deletion faild." ;;
+                echo "Invalid choice. Deletion failed." ;;
         esac
     fi
+
     Connect_Database
 }
 
 function Update_Table() {
-     echo "----- Update ----- "
-     List_Tables
+    echo "----- Update ----- "
+    List_Tables
     read -p "Enter the table name: " table_name
 
     if ! name_validation "$table_name"; then
@@ -467,6 +493,18 @@ function Update_Table() {
             Connect_Database
         fi
 
+
+#------------------------------------
+        # Check if the selected column is the primary key column
+        if [[ "$column_number" == "1" ]]; then
+            # Check if the new primary key value already exists in the PK column
+            if grep -q "^$new_value|" "$DATABASE_DIR/$db_name/$table_name" && ! grep -q "^$new_value|$" "$DATABASE_DIR/$db_name/$table_name"; then
+                echo "Invalid new value. This value already exists."
+                Connect_Database
+            fi
+        fi
+#--------------------------------------------
+
         # Read the entire table file, update the specific row, and write the modified content back
         awk -v row="$db_row_number" -v new_val="$new_value" -F'|' -v col_num="$column_number" '
             NR == row {
@@ -489,7 +527,6 @@ function Update_Table() {
     fi
     Connect_Database
 }
-
 
 
  
@@ -530,37 +567,39 @@ function Connect_Database() {
   List_Databases
   read -p "Enter the database name to connect: " db_name
 
-  if ! name_validation "$db_name"; then
-	echo "Invalid database name. Please use only letters, numbers, and underscores."
-	return
+  if [[ -z "$db_name" || ! "$db_name" =~ [^[:space:]] ]]; then
+    echo "Invalid input."
+    mainmenu
+    return
   fi
-
   db_path="$DATABASE_DIR/$db_name"
 
-  if [ -d "$db_path" ]; then
-	table_options=("Create_Table" "List_Tables" "Drop_Table" "Insert_into_Table" "Select_From_Table" "Delete_From_Table" "Update_Table" "back_to_mainmenu")
+	   if [ -d "$db_path" ]; then
+		table_options=("Create_Table" "List_Tables" "Drop_Table" "Insert_into_Table"   "Select_From_Table" "Delete_From_Table" "Update_Table" "back_to_mainmenu")
 
-	echo -e "\n"
-	echo "Please choose an option from 1 to 8"
-	select table_com in "${table_options[@]}"; do
-  
-  	case $REPLY in
-    	1) Create_Table ;;
-    	2) List_Tables ;;
-    	3) Drop_Table ;;
-    	4) Insert_into_Table ;;
-    	5) Select_From_Table ;;
-    	6) Delete_From_Table ;;
-    	7) Update_Table ;;
-    	8) mainmenu ;;
-    	*) echo "Invalid option" ;;
-  	esac
-	done
-  else
-	echo "This database does not exist."
-        Connect_Database
-  fi
-}
+		echo -e "\n"
+		echo "Please choose an option from 1 to 8"
+		select table_com in "${table_options[@]}"; do
+	  
+	  	case $REPLY in
+	    	1) Create_Table ;;
+	    	2) List_Tables ;;
+	    	3) Drop_Table ;;
+	    	4) Insert_into_Table ;;
+	    	5) Select_From_Table ;;
+	    	6) Delete_From_Table ;;
+	    	7) Update_Table ;;
+	    	8) mainmenu ;;
+	    	*) echo "Invalid option" ;;
+	  	esac
+		done
+	  else
+		echo "This database does not exist."
+		mainmenu
+	  fi
+ 
+	  
+	}
 
 function mainmenu() {
   echo -e "\nPlease choose an option from 1 to 5"
@@ -581,4 +620,5 @@ mainmenu
 }
 
 mainmenu
+
 
